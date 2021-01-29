@@ -4,7 +4,7 @@ const AWS = require('aws-sdk');
 require('dotenv').config();
 
 const app = express()
-const port = 4000
+const port = 4001
 
 app.use(bodyParser.json())
 
@@ -81,7 +81,10 @@ app.get('/get-upload-url', async (req, res) => {
 
 app.post('/complete-upload', async (req, res) => {
 	try {
-		console.log(req.body, ': body')
+
+		// console.log(req.body, ': body')
+		console.log('parts:', req.body.params)
+
 		let params = {
 			Bucket: BUCKET_NAME,
 			Key: req.body.params.fileName,

@@ -1,104 +1,107 @@
-import React, { Component } from 'react'
+import React, { Component, useState, useEffect } from 'react'
 import axios from 'axios'
 
-export default class Index extends Component {
-  constructor(props) {
-    super(props)
-    this.state = {
-      fileSelected: null,
-      uploadId: '',
-      fileName: '',
-      backendUrl: 'http://localhost:4000',
-      uploadPC:0,
-      progressArray:[],
-      uploadProgress:0
-    }
-  }
+const Index=() => {
+ const [fileSelected, setfileSelected]=useState(null)
+  const [uploadId, setuploadId]=useState('')
+  const [Fred, setFred]=useState('')
+  const [fileName, setfileName]=useState('')
+  const [fileType, setfileType]=useState('')
+  // const [uploadPC, setuploadPC]=useState()
+  const [backendUrl, setbackendUrl]=useState('http://localhost:4000')
+  const [progressArray, setProgressArray]=useState([])
+  const [uploadProgress, setUploadProgress]=useState(0)
 
-  async fileHandler(event) {
+  useEffect(() => {
+    if (Fred) 
+    uploadMultipartFile()
+  }, [Fred]);
+  
+  const fileHandler=async(e) =>{
     try {
-      let fileSelected = event.target.files[0]
+      let fileSelected = document.getElementById('myfile').files[0]
       let fileName = fileSelected.name
-      this.setState({ fileSelected })
-      this.setState({ fileName })
+      let fileType = fileSelected.type
+      setfileSelected(fileSelected)
+      setfileName(fileName)
+      setfileType(fileType)
+      // console.log(fileSelected)
     } catch (err) {
       console.error(err, err.message) 
     }
   }
-  
-  async startUpload(event) {
+
+   const startUpload=async(e) =>{
     try {
-      event.preventDefault()
+      e.preventDefault()
+      
       const params = {
-        fileName: this.state.fileName,
-        fileType: this.state.fileSelected.type
+        fileName: fileName,
+        fileType: fileSelected.type
       };
-      // console.log("fs", this.state.fileSelected)
-      // console.log("params:",params)
-      console.log(this.state.progressArray)
-
-      let resp = await axios.get(`${this.state.backendUrl}/start-upload`, { params })
-      let { uploadId } = resp.data
-      this.setState({ uploadId })
-      this.uploadMultipartFile()
-
+      
+      let resp = await axios.get(`${backendUrl}/start-upload`, { params })
+      const { uploadId } = resp.data
+      setFred(uploadId)
     } catch (err) {
-      console.log(err)
+      console.log("startupload ",err)
     }
   }
 
-  async uploadMultipartFile() {
+   const uploadMultipartFile=async() =>{    
     try {
-      // console.log('Inside uploadMultipartFile')
-      const fileSize = this.state.fileSelected.size
-      const CHUNK_SIZE = 4900000 // <5MB
+      console.log("I am Fred:",Fred)
+      const fileSize = fileSelected.size
+      const CHUNK_SIZE = 10000000 // 10MB
       const CHUNKS_COUNT = Math.floor(fileSize / CHUNK_SIZE) + 1
-
-      
-      
-     
       let promisesArray = []
       let start, end, blob
-
       for (let index = 1; index < CHUNKS_COUNT + 1; index++) {
         start = (index - 1) * CHUNK_SIZE
         end = (index) * CHUNK_SIZE
-        blob = (index < CHUNKS_COUNT) ? this.state.fileSelected.slice(start, end) : this.state.fileSelected.slice(start)
+        blob = (index < CHUNKS_COUNT) ? fileSelected.slice(start, end) : fileSelected.slice(start)
 
-        console.log(blob.size)
         // Get presigned URL for each part
-        let getUploadUrlResp = await axios.get(`${this.state.backendUrl}/get-upload-url`, {
+        let getUploadUrlResp = await axios.get(`${backendUrl}/get-upload-url`, {
           params: {
-            fileName: this.state.fileName,
+            fileName: fileName,
             partNumber: index,
-            uploadId: this.state.uploadId
+            uploadId: Fred,
           }
         })
 
-    //new
-    const uploadProgressHandler=async(progressEvent, blob, index) =>{
-      if (progressEvent.loaded >= progressEvent.total) return;
-      const currentProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total);  
-      this.setState(progressArray =>{this.state.progressArray[index-1] = currentProgress});
-        const sum = this.state.progressArray.reduce((acc, curr) => acc + curr);
-        this.setState({uploadProgress:Math.round(sum / CHUNKS_COUNT)});
-        console.log(this.state.progressArray)
-        console.log(this.state.uploadProgress)
-    }
+
+
+
+        const uploadProgressHandler=async(progressEvent, blob, index)=> {
+          if (progressEvent.loaded >= progressEvent.total) return;
+  
+          const currentProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setProgressArray((progressArray) => {
+              progressArray[index-1] = currentProgress;
+              const sum = progressArray.reduce((acc, curr) => acc + curr);
+              setUploadProgress(Math.round(sum / CHUNKS_COUNT));
+              
+              return progressArray;
+          });
+          console.log(progressArray)
+      }
+
+
+
         let { presignedUrl } = getUploadUrlResp.data
-        // console.log('   Presigned URL ' + index + ': ' + presignedUrl + ' filetype ' + this.state.fileSelected.type)
-        
+        console.log('   Presigned URL ' + index + ': ' + presignedUrl + ' filetype ' + fileSelected.type)
+
         // Send part aws server
         let uploadResp = axios.put(presignedUrl, blob, {
           onUploadProgress: (e) => uploadProgressHandler(e, CHUNKS_COUNT, index),
           headers: {
-            'Content-Type': this.state.fileSelected.type
-          },
+            'Content-Type': fileSelected.type
+          }
         })
-        
         promisesArray.push(uploadResp)
-        
       }
+
 
       let resolvedArray = await Promise.all(promisesArray)
       console.log(resolvedArray, ' resolvedArray')
@@ -111,40 +114,41 @@ export default class Index extends Component {
         })
 
       })
-      console.log(uploadPartsArray)
 
+      console.log({uploadPartsArray})
+      console.log("I am Fred:", Fred)
+      console.log({fileName})
 
       // CompleteMultipartUpload in the backend server
-      let completeUploadResp = await axios.post(`${this.state.backendUrl}/complete-upload`, {
+      let completeUploadResp = await axios.post(`${backendUrl}/complete-upload`, {
         params: {
-          fileName: this.state.fileName,
+          fileName: fileName,
           parts: uploadPartsArray,
-          uploadId: this.state.uploadId
+          uploadId: Fred
         }
       })
-   
       console.log(completeUploadResp.data, "complete upload response")
-
 
     } catch (err) {
       console.log(err)
     }
-  }
+  };
 
-  render() {
     return (
       <div>
-        <form onSubmit={this.startUpload.bind(this)}>
+        <form onSubmit={startUpload}>
           <div>
             <p>Upload Dataset:</p>
-            <input type='file' id='file' onChange={this.fileHandler.bind(this)} />
+            <input type='file' id='myfile' onChange={fileHandler} />
             <button type='submit'>
               Upload
             </button>
-            <div>{this.state.uploadProgress}% uploaded</div>
+            <div>{uploadProgress}% uploaded</div>
+
           </div>
         </form>
       </div>
     )
-  }
 }
+
+export default Index
